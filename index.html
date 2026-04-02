@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroShield. InsurLink. | Reliability in Connection</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        .bg-navy { background-color: #0A192F; }
+        .text-gold { color: #D4AF37; }
+        .bg-gold { background-color: #D4AF37; }
+        .border-gold { border-color: #D4AF37; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+
+    <nav class="bg-navy p-6 text-white shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold tracking-tight">AGRO<span class="text-gold">SHIELD</span></h1>
+            <button id="connectBtn" onclick="connectWallet()" class="bg-gold hover:bg-yellow-600 text-navy font-bold py-2 px-6 rounded-full transition duration-300">
+                Connect Wallet
+            </button>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-6 py-12">
+        <div class="max-w-4xl mx-auto grid md:grid-cols-2 gap-8">
+            
+            <div class="bg-white rounded-xl shadow-xl p-8 border-t-4 border-gold">
+                <h2 class="text-navy text-xl font-bold mb-6 uppercase tracking-wider">Policy Status</h2>
+                <div class="space-y-4">
+                    <div class="flex justify-between border-b pb-2">
+                        <span class="text-gray-600">Current State:</span>
+                        <span id="policyStatus" class="font-bold text-red-600">Disconnected</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-2">
+                        <span class="text-gray-600">Threshold:</span>
+                        <span class="font-bold text-navy">50mm Rainfall</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-navy rounded-xl shadow-xl p-8 text-white">
+                <h2 class="text-gold text-xl font-bold mb-6 uppercase tracking-wider">Oracle Portal</h2>
+                <div class="space-y-4">
+                    <input id="rainfallInput" type="number" placeholder="Enter Rainfall (mm)" 
+                        class="w-full p-3 rounded bg-gray-800 border border-gray-700 text-white focus:border-gold outline-none">
+                    
+                    <button onclick="reportWeather()" class="w-full bg-transparent border-2 border-gold text-gold hover:bg-gold hover:text-navy font-bold py-3 rounded transition">
+                        Submit Weather Data
+                    </button>
+                </div>
+                <div id="loading" class="hidden mt-4 text-center animate-pulse text-gold">Processing on Sepolia...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const contractAddress = "0x23eb6427d1AAeCD4711Ea1BC48d366DC0468b37f";
+        const abi = [
+            { "inputs": [ { "internalType": "uint256", "name": "_currentRainfall", "type": "uint256" } ], "name": "reportWeather", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+            { "inputs": [], "name": "policyActive", "outputs": [ { "internalType": "bool", "name": "", "type": "bool" } ], "stateMutability": "view", "type": "function" }
+        ];
+
+        let provider, signer, contract;
+
+        async function connectWallet() {
+            if (typeof ethers === 'undefined') {
+                return alert("Ethers.js library is still not loading.");
+            }
+
+            if (!window.ethereum) return alert("Please install MetaMask!");
+
+            try {
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                
+                const { chainId } = await provider.getNetwork();
+                if (chainId !== 11155111) {
+                    alert("Please switch MetaMask to the Sepolia Test Network.");
+                    return;
+                }
+
+                await provider.send("eth_requestAccounts", []);
+                signer = provider.getSigner();
+                const address = await signer.getAddress();
+
+                contract = new ethers.Contract(contractAddress, abi, signer);
+
+                const btn = document.getElementById('connectBtn');
+                btn.innerText = address.substring(0, 6) + "...";
+                btn.classList.replace('bg-gold', 'bg-green-600');
+                btn.classList.add('text-white');
+
+                updateStatus();
+            } catch (err) {
+                console.error("Connection error:", err);
+            }
+        }
+
+        async function updateStatus() {
+            if (!contract) return;
+            try {
+                const isActive = await contract.policyActive();
+                const statusEl = document.getElementById('policyStatus');
+                statusEl.innerText = isActive ? "ACTIVE" : "INACTIVE";
+                statusEl.className = isActive ? "font-bold text-green-600" : "font-bold text-red-600";
+            } catch (err) {
+                console.log("Status check failed");
+            }
+        }
+
+        async function reportWeather() {
+            if (!contract) return alert("Please connect wallet first!");
+            const val = document.getElementById('rainfallInput').value;
+            if (!val) return alert("Enter a rainfall number.");
+
+            try {
+                document.getElementById('loading').classList.remove('hidden');
+                const tx = await contract.reportWeather(val);
+                await tx.wait();
+                alert("Blockchain Updated Successfully!");
+                updateStatus();
+            } catch (err) {
+                console.error(err);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
